@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sesli Dikte Asistanı (Türkçe)</title>
+    <style>
+        body { background: #0f172a; color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; }
+        .dashboard { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: 1fr 2fr; gap: 25px; }
+        .panel { background: #1e293b; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); border: 1px solid #334155; }
+        .header { grid-column: 1 / -1; text-align: center; padding: 10px 0 20px 0; }
+        h1 { color: #38bdf8; margin: 0; font-size: 2.2em; }
+        p.subtitle { color: #94a3b8; font-size: 1em; }
+        
+        .mic-container { text-align: center; padding: 30px 10px; }
+        .mic-btn { width: 90px; height: 90px; border-radius: 50%; background: #38bdf8; border: none; color: white; font-size: 2.2em; cursor: pointer; transition: 0.3s; box-shadow: 0 0 20px rgba(56, 189, 248, 0.4); display: inline-flex; align-items: center; justify-content: center; }
+        .mic-btn:hover { transform: scale(1.05); }
+        .mic-btn.recording { background: #ef4444; animation: pulse 1.5s infinite; box-shadow: 0 0 25px rgba(239, 68, 68, 0.6); }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .status-badge { margin-top: 20px; padding: 10px 15px; border-radius: 8px; background: #0f172a; text-align: center; font-weight: bold; color: #94a3b8; border: 1px solid #334155; }
+        textarea { width: 100%; height: 380px; background: #0f172a; color: #f8fafc; border: 1px solid #475569; border-radius: 8px; padding: 15px; resize: none; box-sizing: border-box; font-size: 1.1em; line-height: 1.6; }
+        
+        .btn-group { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
+        button.action-btn { flex: 1; min-width: 120px; background: #334155; color: white; border: 1px solid #475569; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; text-transform: uppercase; font-size: 0.85em; }
+        button.action-btn:hover { background: #475569; color: #38bdf8; }
+        
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .dashboard { grid-template-columns: 1fr; gap: 15px; }
+            textarea { height: 280px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1>🎙️ Akıllı Türkçe Dikte Asistanı</h1>
+            <p class="subtitle">Konuşun, anında metne dönüştürsün. (En iyi sonuç için Chrome veya Edge kullanın)</p>
+        </div>
+        
+        <div class="panel">
+            <h3 style="margin-top: 0; color: #e2e8f0; text-align: center;">Ses Kontrolü</h3>
+            
+            <div class="mic-container">
+                <button id="mic-btn" class="mic-btn" onclick="toggleListening()">🎤</button>
+            </div>
+            
+            <div class="status-badge" id="status-badge">Mikrofona basıp konuşmaya başlayın...</div>
+            
+            <div class="btn-group" style="margin-top: 25px;">
+                <button class="action-btn" onclick="copyText()">📋 Metni Kopyala</button>
+                <button class="action-btn" onclick="downloadTxt()">💾 İndir (.txt)</button>
+                <button class="action-btn" style="color: #f87171;" onclick="clearText()">🗑️ Temizle</button>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <h3 style="margin-top: 0; color: #e2e8f0;">Oluşturulan Doküman</h3>
+            <textarea id="text-display" placeholder="Söyledikleriniz burada anlık olarak görünecektir..."></textarea>
+        </div>
+    </div>
+
+    <script>
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
+        let isListening = false;
+        let finalTranscript = "";
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.lang = 'tr-TR';
+            recognition.continuous = true; // Konuşma duraklasa da dinlemeye devam et
+            recognition.interimResults = true; // Konuşurken anlık geçici metinleri göster
+
+            recognition.onstart = () => {
+                isListening = true;
+                document.getElementById('mic-btn').classList.add('recording');
+                document.getElementById('status-badge').innerText = '🔴 Dinleniyor... Konuşabilirsiniz.';
+                document.getElementById('status-badge').style.color = '#ef4444';
+            };
+
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript + '. ';
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+                
+                const textArea = document.getElementById('text-display');
+                textArea.value = finalTranscript + interimTranscript;
+                textArea.scrollTop = textArea.scrollHeight; // Otomatik aşağı kaydır
+            };
+
+            recognition.onerror = (event) => {
+                console.error("Ses tanıma hatası:", event.error);
+                if (event.error === 'not-allowed') {
+                    alert('Mikrofon erişimine izin vermeniz gerekiyor!');
+                }
+            };
+
+            recognition.onend = () => {
+                // Eğer kullanıcı kendisi kapatmadıysa ve sistem zaman aşımına uğradıysa otomatik tekrar başlat
+                if (isListening) {
+                    recognition.start();
+                } else {
+                    document.getElementById('mic-btn').classList.remove('recording');
+                    document.getElementById('status-badge').innerText = '⚪ Dinleme durduruldu.';
+                    document.getElementById('status-badge').style.color = '#94a3b8';
+                }
+            };
+        } else {
+            alert("Tarayıcınız ses tanıma özelliğini desteklemiyor. Lütfen Google Chrome veya Microsoft Edge kullanın.");
+        }
+
+        function toggleListening() {
+            if (!recognition) return;
+            
+            if (isListening) {
+                isListening = false;
+                recognition.stop();
+            } else {
+                finalTranscript = document.getElementById('text-display').value; // Mevcut metni koru
+                recognition.start();
+            }
+        }
+
+        function copyText() {
+            const textArea = document.getElementById('text-display');
+            if (!textArea.value) return;
+            navigator.clipboard.writeText(textArea.value);
+            alert("Metin panoya kopyalandı!");
+        }
+
+        function downloadTxt() {
+            const text = document.getElementById('text-display').value;
+            if (!text) return alert("İndirilecek metin bulunamadı!");
+            
+            const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "dikte_dokumani.txt";
+            a.click();
+        }
+
+        function clearText() {
+            if (confirm("Tüm metni silmek istediğinize emin misiniz?")) {
+                finalTranscript = "";
+                document.getElementById('text-display').value = "";
+            }
+        }
+    </script>
+</body>
+</html>
